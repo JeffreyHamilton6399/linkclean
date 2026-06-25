@@ -6,15 +6,14 @@ import { toast } from "sonner";
 
 import { cn } from "@/lib/utils";
 import { cleanUrl, cleanUrls, pluralParams } from "@/lib/clean";
-import { TRACKING_PARAMS, TRACKING_PARAM_COUNT } from "@/lib/params";
 import { Logo } from "@/components/logo";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { Switch } from "@/components/ui/switch";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
@@ -22,6 +21,7 @@ import {
   Dialog,
   DialogContent,
   DialogDescription,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
@@ -30,20 +30,20 @@ import {
   CheckCircle2,
   Copy,
   ExternalLink,
+  FileText,
   Github,
   Heart,
-  ListFilter,
   Moon,
-  Scissors,
   Settings,
   ShieldCheck,
+  Shield,
   Sun,
   Trash2,
 } from "lucide-react";
 
 const DONATE_URL = "https://buymeacoffee.com/jeffreyscof";
 const GITHUB_URL = "https://github.com/JeffreyHamilton6399/linkclean";
-const LS_SHOW_REMOVED = "linkclean.showRemoved";
+const LS_CONSENT = "linkclean.consent.v1";
 
 /* -------------------------------------------------------------------------- */
 /*  Clipboard helper                                                          */
@@ -80,8 +80,9 @@ export default function Home() {
   const [input, setInput] = React.useState("");
   const [copied, setCopied] = React.useState(false);
   const [mounted, setMounted] = React.useState(false);
-  const [showRemoved, setShowRemoved] = React.useState(true);
-  const [paramsOpen, setParamsOpen] = React.useState(false);
+  const [consented, setConsented] = React.useState(true);
+  const [privacyOpen, setPrivacyOpen] = React.useState(false);
+  const [termsOpen, setTermsOpen] = React.useState(false);
   const textareaRef = React.useRef<HTMLTextAreaElement>(null);
 
   const { theme, setTheme } = useTheme();
@@ -89,20 +90,19 @@ export default function Home() {
   React.useEffect(() => {
     setMounted(true);
     try {
-      const stored = localStorage.getItem(LS_SHOW_REMOVED);
-      if (stored !== null) setShowRemoved(stored === "1");
+      setConsented(localStorage.getItem(LS_CONSENT) === "1");
     } catch {
-      /* ignore */
+      setConsented(false);
     }
   }, []);
 
-  const toggleShowRemoved = React.useCallback((next: boolean) => {
-    setShowRemoved(next);
+  const acceptConsent = React.useCallback(() => {
     try {
-      localStorage.setItem(LS_SHOW_REMOVED, next ? "1" : "0");
+      localStorage.setItem(LS_CONSENT, "1");
     } catch {
       /* ignore */
     }
+    setConsented(true);
   }, []);
 
   /* ---- derived cleaning result (instant, synchronous) ---- */
@@ -134,13 +134,17 @@ export default function Home() {
     try {
       const text = await navigator.clipboard.readText();
       if (text) {
-        setInput((prev) => (prev ? prev + (prev.endsWith("\n") ? "" : "\n") + text : text));
+        setInput((prev) =>
+          prev ? prev + (prev.endsWith("\n") ? "" : "\n") + text : text,
+        );
         toast.success("Pasted from clipboard");
       }
     } catch {
       toast.error("Clipboard read blocked — paste manually");
     }
   }, []);
+
+  const isDark = mounted && theme === "dark";
 
   return (
     <div className="bg-background text-foreground flex h-dvh flex-col overflow-hidden">
@@ -155,9 +159,6 @@ export default function Home() {
           <span className="truncate text-sm font-semibold tracking-tight">
             LinkClean
           </span>
-          <span className="bg-muted text-muted-foreground hidden rounded-full px-2 py-0.5 text-[10px] font-medium sm:inline">
-            {TRACKING_PARAM_COUNT} params stripped
-          </span>
         </div>
 
         <div className="flex items-center gap-1.5">
@@ -171,7 +172,7 @@ export default function Home() {
             </a>
           </Button>
 
-          {/* Settings dropdown — styled to match the Donate pill */}
+          {/* Settings dropdown */}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button
@@ -184,51 +185,35 @@ export default function Home() {
             </DropdownMenuTrigger>
             <DropdownMenuContent
               align="end"
-              className="w-56"
+              className="w-52"
               sideOffset={6}
             >
               <DropdownMenuItem
                 onSelect={(e) => {
                   e.preventDefault();
-                  setTheme(mounted && theme === "dark" ? "light" : "dark");
+                  setTheme(isDark ? "light" : "dark");
                 }}
               >
-                {mounted && theme === "dark" ? (
+                {isDark ? (
                   <Sun className="mr-2 size-3.5" />
                 ) : (
                   <Moon className="mr-2 size-3.5" />
                 )}
-                <span className="flex-1">
-                  {mounted && theme === "dark" ? "Light" : "Dark"}
-                </span>
+                <span className="flex-1">{isDark ? "Light mode" : "Dark mode"}</span>
               </DropdownMenuItem>
 
               <DropdownMenuSeparator />
 
-              <DropdownMenuItem
-                onSelect={(e) => {
-                  e.preventDefault();
-                  toggleShowRemoved(!showRemoved);
-                }}
-              >
-                <ListFilter className="mr-2 size-3.5" />
-                <span className="flex-1">Show what was removed</span>
-                <Switch
-                  checked={showRemoved}
-                  tabIndex={-1}
-                  aria-hidden="true"
-                  className="pointer-events-none data-[state=checked]:bg-emerald-500"
-                />
+              <DropdownMenuLabel className="text-muted-foreground text-[11px] font-medium uppercase tracking-wide">
+                Legal
+              </DropdownMenuLabel>
+              <DropdownMenuItem onSelect={() => setPrivacyOpen(true)}>
+                <Shield className="mr-2 size-3.5" />
+                Privacy Policy
               </DropdownMenuItem>
-
-              <DropdownMenuSeparator />
-
-              <DropdownMenuItem onSelect={() => setParamsOpen(true)}>
-                <Scissors className="mr-2 size-3.5" />
-                Stripped parameters
-                <span className="text-muted-foreground ml-auto text-xs">
-                  {TRACKING_PARAM_COUNT}
-                </span>
+              <DropdownMenuItem onSelect={() => setTermsOpen(true)}>
+                <FileText className="mr-2 size-3.5" />
+                Terms of Service
               </DropdownMenuItem>
 
               <DropdownMenuSeparator />
@@ -236,7 +221,7 @@ export default function Home() {
               <DropdownMenuItem asChild>
                 <a href={GITHUB_URL} target="_blank" rel="noopener noreferrer">
                   <Github className="mr-2 size-3.5" />
-                  View on GitHub
+                  GitHub
                   <ExternalLink className="ml-auto size-3.5 opacity-60" />
                 </a>
               </DropdownMenuItem>
@@ -326,13 +311,11 @@ export default function Home() {
 
             {/* Single result */}
             {hasInput && !isBatch && single && (
-              <SingleResult result={single} showRemoved={showRemoved} />
+              <SingleResult result={single} />
             )}
 
             {/* Batch result */}
-            {hasInput && isBatch && (
-              <BatchResult batch={batch} showRemoved={showRemoved} />
-            )}
+            {hasInput && isBatch && <BatchResult batch={batch} />}
           </div>
         </section>
       </main>
@@ -354,32 +337,12 @@ export default function Home() {
       {/* ------------------------------------------------------------------ */}
       {/* Dialogs                                                             */}
       {/* ------------------------------------------------------------------ */}
-      <Dialog open={paramsOpen} onOpenChange={setParamsOpen}>
-        <DialogContent className="max-h-[80vh] max-w-lg overflow-hidden">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <Scissors className="size-4 text-emerald-500" />
-              Stripped parameters
-            </DialogTitle>
-            <DialogDescription>
-              {TRACKING_PARAM_COUNT} tracking parameters are removed from every
-              URL. Everything else is left untouched.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="max-h-[55vh] overflow-y-auto pr-1">
-            <ul className="flex flex-wrap gap-1.5">
-              {TRACKING_PARAMS.map((p) => (
-                <li
-                  key={p}
-                  className="bg-muted text-muted-foreground rounded-md px-2 py-1 font-mono text-xs"
-                >
-                  {p}
-                </li>
-              ))}
-            </ul>
-          </div>
-        </DialogContent>
-      </Dialog>
+
+      {/* First-visit consent */}
+      <ConsentDialog open={!consented} onAccept={acceptConsent} />
+
+      <PrivacyPolicyDialog open={privacyOpen} onOpenChange={setPrivacyOpen} />
+      <TermsDialog open={termsOpen} onOpenChange={setTermsOpen} />
     </div>
   );
 }
@@ -406,13 +369,7 @@ function EmptyState() {
 /*  Single result                                                              */
 /* -------------------------------------------------------------------------- */
 
-function SingleResult({
-  result,
-  showRemoved,
-}: {
-  result: ReturnType<typeof cleanUrl>;
-  showRemoved: boolean;
-}) {
+function SingleResult({ result }: { result: ReturnType<typeof cleanUrl> }) {
   if (!result.ok) {
     return (
       <div className="flex flex-1 flex-col gap-2 p-3">
@@ -439,7 +396,7 @@ function SingleResult({
           <CheckCircle2 className="size-3.5" />
           This URL is already clean
         </p>
-      ) : showRemoved ? (
+      ) : (
         <div className="mt-1">
           <p className="text-muted-foreground text-xs">
             Removed:{" "}
@@ -451,10 +408,6 @@ function SingleResult({
             </span>
           </p>
         </div>
-      ) : (
-        <p className="text-muted-foreground text-xs">
-          Removed {pluralParams(result.removed.length)}
-        </p>
       )}
     </div>
   );
@@ -464,13 +417,7 @@ function SingleResult({
 /*  Batch result                                                               */
 /* -------------------------------------------------------------------------- */
 
-function BatchResult({
-  batch,
-  showRemoved,
-}: {
-  batch: ReturnType<typeof cleanUrls>;
-  showRemoved: boolean;
-}) {
+function BatchResult({ batch }: { batch: ReturnType<typeof cleanUrls> }) {
   return (
     <div className="flex flex-1 flex-col overflow-y-auto p-3">
       <div className="flex-1 space-y-2">
@@ -478,7 +425,6 @@ function BatchResult({
           <div
             key={i}
             className="border-l-2 pl-2"
-            data-clean={r.ok ? "" : undefined}
             style={{
               borderColor: r.ok
                 ? r.removed.length
@@ -495,7 +441,7 @@ function BatchResult({
             >
               {r.ok ? r.clean : `Invalid: ${r.original}`}
             </p>
-            {r.ok && r.removed.length > 0 && showRemoved && (
+            {r.ok && r.removed.length > 0 && (
               <p className="text-muted-foreground mt-0.5 text-[11px]">
                 − {r.removed.join(", ")}
               </p>
@@ -515,5 +461,234 @@ function BatchResult({
         )}
       </div>
     </div>
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+/*  Consent dialog (first visit)                                              */
+/* -------------------------------------------------------------------------- */
+
+function ConsentDialog({
+  open,
+  onAccept,
+}: {
+  open: boolean;
+  onAccept: () => void;
+}) {
+  return (
+    <Dialog
+      open={open}
+      onOpenChange={() => {
+        /* not dismissable except via the accept button */
+      }}
+    >
+      <DialogContent
+        className="max-h-[85vh] max-w-lg gap-0 overflow-hidden p-0"
+        onInteractOutside={(e) => e.preventDefault()}
+        onEscapeKeyDown={(e) => e.preventDefault()}
+        showCloseButton={false}
+      >
+        <DialogHeader className="space-y-2 border-b p-5 pb-4">
+          <DialogTitle className="flex items-center gap-2 text-lg">
+            <span className="bg-emerald-500 text-white flex size-7 items-center justify-center rounded-lg">
+              <Logo className="size-4" />
+            </span>
+            Welcome to LinkClean
+          </DialogTitle>
+          <DialogDescription>
+            Before you start, please review our Terms of Service and Privacy
+            Policy.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="max-h-[52vh] space-y-4 overflow-y-auto p-5 text-sm leading-relaxed">
+          <div className="space-y-1.5">
+            <h3 className="flex items-center gap-1.5 font-medium">
+              <Shield className="size-4 text-emerald-500" />
+              Privacy Policy (summary)
+            </h3>
+            <p className="text-muted-foreground">
+              LinkClean runs entirely in your browser. We collect no personal
+              data, use no cookies, no analytics, and no third-party trackers.
+              The URLs you paste never leave your device — they are processed
+              locally and never sent to any server. The only thing stored is a
+              note in your browser that you&apos;ve accepted these terms, plus
+              your theme preference.
+            </p>
+          </div>
+
+          <div className="space-y-1.5">
+            <h3 className="flex items-center gap-1.5 font-medium">
+              <FileText className="size-4 text-emerald-500" />
+              Terms of Service (summary)
+            </h3>
+            <p className="text-muted-foreground">
+              LinkClean is free to use and provided “as is” without warranty of
+              any kind. You are responsible for the URLs you process and share.
+              The developer assumes no liability for any damages arising from
+              use of the tool. The service may change or be discontinued at any
+              time without notice.
+            </p>
+          </div>
+        </div>
+
+        <DialogFooter className="border-t p-4">
+          <Button
+            onClick={onAccept}
+            className="h-9 w-full rounded-lg bg-emerald-500 text-sm font-medium text-white hover:bg-emerald-600"
+          >
+            <Check className="size-4" />
+            I Agree — Continue
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+/*  Privacy Policy dialog                                                      */
+/* -------------------------------------------------------------------------- */
+
+function PrivacyPolicyDialog({
+  open,
+  onOpenChange,
+}: {
+  open: boolean;
+  onOpenChange: (v: boolean) => void;
+}) {
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-h-[85vh] max-w-lg gap-0 overflow-hidden p-0">
+        <DialogHeader className="space-y-2 border-b p-5 pb-4">
+          <DialogTitle className="flex items-center gap-2">
+            <Shield className="size-5 text-emerald-500" />
+            Privacy Policy
+          </DialogTitle>
+          <DialogDescription>
+            Your privacy is the entire point of LinkClean.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="max-h-[60vh] space-y-4 overflow-y-auto p-5 text-sm leading-relaxed text-muted-foreground">
+          <section className="space-y-1.5">
+            <h3 className="text-foreground font-medium">No data collection</h3>
+            <p>
+              LinkClean does not collect, store, or transmit any personal data.
+              There are no accounts, no sign-up, and no user identifiers of any
+              kind.
+            </p>
+          </section>
+          <section className="space-y-1.5">
+            <h3 className="text-foreground font-medium">No cookies or trackers</h3>
+            <p>
+              We do not use cookies. We do not use Google Analytics, Facebook
+              Pixel, or any other analytics or tracking service. No
+              third-party scripts are loaded.
+            </p>
+          </section>
+          <section className="space-y-1.5">
+            <h3 className="text-foreground font-medium">URLs stay on your device</h3>
+            <p>
+              Every URL you paste is processed entirely in your browser using
+              the native JavaScript URL API. Your URLs are never sent to any
+              server — there is no backend.
+            </p>
+          </section>
+          <section className="space-y-1.5">
+            <h3 className="text-foreground font-medium">Local storage</h3>
+            <p>
+              We use your browser&apos;s localStorage for exactly two things:
+              remembering whether you&apos;ve accepted these terms, and your
+              light/dark theme preference. This data never leaves your device.
+            </p>
+          </section>
+          <section className="space-y-1.5">
+            <h3 className="text-foreground font-medium">Open source</h3>
+            <p>
+              LinkClean is open source. You can audit the entire codebase at{" "}
+              <a
+                href={GITHUB_URL}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-emerald-600 dark:text-emerald-400 underline-offset-4 hover:underline"
+              >
+                github.com/JeffreyHamilton6399/linkclean
+              </a>
+              .
+            </p>
+          </section>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+/*  Terms of Service dialog                                                    */
+/* -------------------------------------------------------------------------- */
+
+function TermsDialog({
+  open,
+  onOpenChange,
+}: {
+  open: boolean;
+  onOpenChange: (v: boolean) => void;
+}) {
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-h-[85vh] max-w-lg gap-0 overflow-hidden p-0">
+        <DialogHeader className="space-y-2 border-b p-5 pb-4">
+          <DialogTitle className="flex items-center gap-2">
+            <FileText className="size-5 text-emerald-500" />
+            Terms of Service
+          </DialogTitle>
+          <DialogDescription>
+            By using LinkClean, you agree to the following terms.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="max-h-[60vh] space-y-4 overflow-y-auto p-5 text-sm leading-relaxed text-muted-foreground">
+          <section className="space-y-1.5">
+            <h3 className="text-foreground font-medium">Free to use</h3>
+            <p>
+              LinkClean is provided free of charge. There are no paid tiers, no
+              accounts, and no hidden costs.
+            </p>
+          </section>
+          <section className="space-y-1.5">
+            <h3 className="text-foreground font-medium">No warranty</h3>
+            <p>
+              LinkClean is provided “as is” and “as available”, without
+              warranty of any kind — express or implied. While we strive for
+              accuracy, we do not guarantee that every tracking parameter will
+              be detected or that the cleaned URL will function identically to
+              the original.
+            </p>
+          </section>
+          <section className="space-y-1.5">
+            <h3 className="text-foreground font-medium">Your responsibility</h3>
+            <p>
+              You are solely responsible for the URLs you process and the
+              resulting links you choose to share. LinkClean is a tool — how you
+              use it is up to you.
+            </p>
+          </section>
+          <section className="space-y-1.5">
+            <h3 className="text-foreground font-medium">Limitation of liability</h3>
+            <p>
+              The developer shall not be liable for any damages arising from the
+              use of, or inability to use, LinkClean.
+            </p>
+          </section>
+          <section className="space-y-1.5">
+            <h3 className="text-foreground font-medium">Changes</h3>
+            <p>
+              These terms may be updated at any time. Continued use of LinkClean
+              constitutes acceptance of the revised terms. The service itself
+              may change or be discontinued without notice.
+            </p>
+          </section>
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 }
