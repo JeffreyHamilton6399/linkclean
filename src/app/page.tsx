@@ -15,9 +15,6 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuRadioGroup,
-  DropdownMenuRadioItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
@@ -35,7 +32,6 @@ import {
   ExternalLink,
   Github,
   Heart,
-  Info,
   ListFilter,
   Moon,
   Scissors,
@@ -85,7 +81,6 @@ export default function Home() {
   const [copied, setCopied] = React.useState(false);
   const [mounted, setMounted] = React.useState(false);
   const [showRemoved, setShowRemoved] = React.useState(true);
-  const [aboutOpen, setAboutOpen] = React.useState(false);
   const [paramsOpen, setParamsOpen] = React.useState(false);
   const textareaRef = React.useRef<HTMLTextAreaElement>(null);
 
@@ -192,23 +187,21 @@ export default function Home() {
               className="w-56"
               sideOffset={6}
             >
-              <DropdownMenuLabel className="text-muted-foreground text-[11px] font-medium uppercase tracking-wide">
-                Theme
-              </DropdownMenuLabel>
-              <DropdownMenuRadioGroup
-                value={mounted ? theme : undefined}
-                onValueChange={setTheme}
+              <DropdownMenuItem
+                onSelect={(e) => {
+                  e.preventDefault();
+                  setTheme(mounted && theme === "dark" ? "light" : "dark");
+                }}
               >
-                <DropdownMenuRadioItem value="light">
-                  <Sun className="mr-2 size-3.5" /> Light
-                </DropdownMenuRadioItem>
-                <DropdownMenuRadioItem value="dark">
-                  <Moon className="mr-2 size-3.5" /> Dark
-                </DropdownMenuRadioItem>
-                <DropdownMenuRadioItem value="system">
-                  <Settings className="mr-2 size-3.5" /> System
-                </DropdownMenuRadioItem>
-              </DropdownMenuRadioGroup>
+                {mounted && theme === "dark" ? (
+                  <Sun className="mr-2 size-3.5" />
+                ) : (
+                  <Moon className="mr-2 size-3.5" />
+                )}
+                <span className="flex-1">
+                  {mounted && theme === "dark" ? "Light" : "Dark"}
+                </span>
+              </DropdownMenuItem>
 
               <DropdownMenuSeparator />
 
@@ -237,10 +230,6 @@ export default function Home() {
                   {TRACKING_PARAM_COUNT}
                 </span>
               </DropdownMenuItem>
-              <DropdownMenuItem onSelect={() => setAboutOpen(true)}>
-                <Info className="mr-2 size-3.5" />
-                About LinkClean
-              </DropdownMenuItem>
 
               <DropdownMenuSeparator />
 
@@ -248,13 +237,6 @@ export default function Home() {
                 <a href={GITHUB_URL} target="_blank" rel="noopener noreferrer">
                   <Github className="mr-2 size-3.5" />
                   View on GitHub
-                  <ExternalLink className="ml-auto size-3.5 opacity-60" />
-                </a>
-              </DropdownMenuItem>
-              <DropdownMenuItem asChild>
-                <a href={DONATE_URL} target="_blank" rel="noopener noreferrer">
-                  <Heart className="mr-2 size-3.5" />
-                  Buy me a coffee
                   <ExternalLink className="ml-auto size-3.5 opacity-60" />
                 </a>
               </DropdownMenuItem>
@@ -372,50 +354,6 @@ export default function Home() {
       {/* ------------------------------------------------------------------ */}
       {/* Dialogs                                                             */}
       {/* ------------------------------------------------------------------ */}
-      <Dialog open={aboutOpen} onOpenChange={setAboutOpen}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <span className="bg-emerald-500 text-white flex size-7 items-center justify-center rounded-lg">
-                <Logo className="size-4" />
-              </span>
-              LinkClean
-            </DialogTitle>
-            <DialogDescription className="text-sm leading-relaxed">
-              LinkClean strips tracking parameters from URLs — instantly, in
-              your browser. Paste a messy link, get a clean one, and stop
-              sharing tracking data when you share links.
-            </DialogDescription>
-          </DialogHeader>
-          <ul className="text-muted-foreground space-y-1.5 text-sm">
-            <li className="flex items-center gap-2">
-              <Check className="size-4 text-emerald-500" /> No tracking, no
-              sign-up, 100% free
-            </li>
-            <li className="flex items-center gap-2">
-              <Check className="size-4 text-emerald-500" /> URLs never leave your
-              browser
-            </li>
-            <li className="flex items-center gap-2">
-              <Check className="size-4 text-emerald-500" /> Strips{" "}
-              {TRACKING_PARAM_COUNT} tracking parameters
-            </li>
-          </ul>
-          <div className="text-muted-foreground border-t pt-3 text-xs">
-            Built by Jeffrey Hamilton. If it saved you a click, consider{" "}
-            <a
-              href={DONATE_URL}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-rose-500 font-medium underline-offset-4 hover:underline"
-            >
-              buying a coffee
-            </a>
-            .
-          </div>
-        </DialogContent>
-      </Dialog>
-
       <Dialog open={paramsOpen} onOpenChange={setParamsOpen}>
         <DialogContent className="max-h-[80vh] max-w-lg overflow-hidden">
           <DialogHeader>
