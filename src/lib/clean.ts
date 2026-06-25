@@ -1,11 +1,14 @@
-import { TRACKING_PARAM_SET } from "@/lib/params";
+import {
+  TRACKING_PARAM_SET,
+  TRACKING_PREFIXES,
+} from "@/lib/params";
 
 export interface CleanResult {
   /** The cleaned URL as a string. */
   clean: string;
-  /** The list of tracking parameter names that were removed, in original order. */
+  /** The list of tracking parameter names that were removed, in first-seen order, de-duplicated. */
   removed: string[];
-  /** Whether the input was recognised as a valid URL. */
+  /** Whether the input was recognised as a cleanable web URL. */
   ok: boolean;
   /** The original input (trimmed). */
   original: string;
@@ -14,11 +17,69 @@ export interface CleanResult {
 }
 
 /**
- * Strip tracking parameters from a single URL.
+ * Does a parameter name (case-insensitive) look like a tracker?
+ * Checks the explicit set first, then the conservative prefix globs.
+ */
+function isTrackingParam(name: string): boolean {
+  const k = name.toLowerCase();
+  if (TRACKING_PARAM_SET.has(k)) return true;
+  for (const prefix of TRACKING_PREFIXES) {
+    if (k.startsWith(prefix)) return true;
+  }
+  return false;
+}
+
+/**
+ * Parse a user-pasted string into a web URL, tolerating bare domains.
  *
- * Pure, synchronous, runs entirely in the browser. If the input is missing a
- * protocol we prepend `https://` so the native URL parser can handle it. The
- * original protocol/scheme is always preserved on the way out.
+ * Safety rules:
+ *  - Never mangle non-web URLs (mailto:, tel:, sms:, custom schemes). These are
+ *    returned to the caller as "out of scope" (ok: true, nothing removed).
+ *  - If the input has no scheme but looks like a bare domain, prepend https://.
+ *  - Never follow redirects and never contact any server — pure parsing only.
+ *  - The scheme, host, port and path are always preserved untouched.
+ */
+function parseWebUrl(original: string): URL | null {
+  let url: URL;
+  try {
+    url = new URL(original);
+  } catch {
+    // No valid scheme — try treating it as a bare domain.
+    try {
+      url = new URL(`https://${original}`);
+    } catch {
+      return null;
+    }
+  }
+
+  // If it parsed but isn't a web URL, and the original looks like a bare
+  // domain (e.g. "example.com:8080"), retry with an https:// prefix so we
+  // don't mistake "host:port" for a custom scheme.
+  if (
+    url.protocol !== "http:" &&
+    url.protocol !== "https:" &&
+    /^[a-z0-9-]+(\.[a-z0-9-]+)+/i.test(original)
+  ) {
+    try {
+      url = new URL(`https://${original}`);
+    } catch {
+      return null;
+    }
+  }
+
+  if (url.protocol !== "http:" && url.protocol !== "https:") {
+    // Non-web URL (mailto:, tel:, …) — out of scope. Signal "not cleanable"
+    // by returning null; the caller treats it as already clean / untouched.
+    return null;
+  }
+  return url;
+}
+
+/**
+ * Strip tracking parameters from a single URL — including from the fragment.
+ *
+ * Pure, synchronous, runs entirely in the browser. Preserves the order and
+ * encoding of all non-tracking parameters.
  */
 export function cleanUrl(input: string): CleanResult {
   const original = input.trim();
@@ -26,14 +87,21 @@ export function cleanUrl(input: string): CleanResult {
     return { clean: "", removed: [], ok: false, original, error: "empty" };
   }
 
-  // Remember whether the user supplied a scheme; the URL API requires one.
-  const hasScheme = /^[a-z][a-z0-9+.-]*:\/\//i.test(original);
-  const candidate = hasScheme ? original : `https://${original}`;
-
-  let url: URL;
-  try {
-    url = new URL(candidate);
-  } catch {
+  const url = parseWebUrl(original);
+  if (!url) {
+    // Could be a non-web URL (mailto/tel) or genuinely invalid. If the native
+    // parser accepts it as a non-web URL, treat it as "already clean" so we
+    // don't accuse the user of a bad link; otherwise flag as invalid.
+    let nonWeb = false;
+    try {
+      const u = new URL(original);
+      nonWeb = u.protocol !== "http:" && u.protocol !== "https:";
+    } catch {
+      nonWeb = false;
+    }
+    if (nonWeb) {
+      return { clean: original, removed: [], ok: true, original };
+    }
     return {
       clean: original,
       removed: [],
@@ -44,18 +112,50 @@ export function cleanUrl(input: string): CleanResult {
   }
 
   const removed: string[] = [];
+  const seen = new Set<string>();
+
+  // --- Query string ---
   // Iterate over a snapshot of keys so deletion during iteration is safe.
   const keys = Array.from(url.searchParams.keys());
   for (const key of keys) {
-    if (TRACKING_PARAM_SET.has(key)) {
-      // A parameter may legitimately appear multiple times — delete all.
+    if (isTrackingParam(key)) {
+      // A parameter may legitimately appear multiple times — delete all of
+      // them, but report the name only once.
       url.searchParams.delete(key);
-      removed.push(key);
+      if (!seen.has(key.toLowerCase())) {
+        seen.add(key.toLowerCase());
+        removed.push(key);
+      }
     }
   }
 
-  // Remove a now-empty search string entirely (trailing "?" cleanup).
-  const clean = url.toString().replace(/\?$/, "");
+  // --- Fragment / hash ---
+  // Some trackers (notably GA's _gl linker) live in the hash. If the hash
+  // looks like key=value&key=value, clean it the same way. Anything without
+  // an "=" (e.g. "#section" or SPA routes) is left untouched.
+  if (url.hash.startsWith("#") && url.hash.includes("=")) {
+    const body = url.hash.slice(1);
+    const parts = body.split("&");
+    const kept: string[] = [];
+    for (const part of parts) {
+      const eq = part.indexOf("=");
+      const k = eq === -1 ? part : part.slice(0, eq);
+      if (isTrackingParam(k)) {
+        if (!seen.has(k.toLowerCase())) {
+          seen.add(k.toLowerCase());
+          removed.push(k);
+        }
+      } else {
+        kept.push(part);
+      }
+    }
+    url.hash = kept.length ? `#${kept.join("&")}` : "";
+  }
+
+  // Tidy: drop a now-empty search string ("?") and a lone trailing "#".
+  let clean = url.toString();
+  if (clean.endsWith("?")) clean = clean.slice(0, -1);
+  if (clean.endsWith("#")) clean = clean.slice(0, -1);
 
   return { clean, removed, ok: true, original };
 }
